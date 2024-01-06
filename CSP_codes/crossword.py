@@ -225,7 +225,6 @@ def check_intersections(w1, w2):
     else:
         return []
 
-
 def check_constraint(item, assigned_variable_list):
     if assigned_variable_list != None:
         for word in assigned_variable_list:
@@ -235,27 +234,32 @@ def check_constraint(item, assigned_variable_list):
                 if len(intersection) != 0:
                     if item.orientation == 0: #horizontal
                         if item.value[int(intersection[0][1]-item.start_coord[1])] != word.value[int(intersection[0][0]-word.start_coord[0])]:
+                            # print(f' horizontal word: {item.value}')
                             return False
                     else: #vertical
                         if item.value[int(intersection[0][0]-item.start_coord[0])] != word.value[int(intersection[0][1]-word.start_coord[1])]:
+                            # print(f'vertival word: {item.value}')
                             return False
     return True
 
+
 def backtracking(used_words, not_used_words, words):
-    # there are no variables to assign a value so we are done
+    #print(f'backtracking')
+    # there are no variables to assign a value
     if len(not_used_words) == 0:
         return used_words
 
     word = not_used_words[0]
-    possible_word = get_possible_words(word, used_words, words)
+    possible_words = get_possible_words(word, used_words, words)
 
-    for w in possible_word:
+    for w in possible_words:
         # we create the variable check_var to do the checking
         # and avoid assigning values which do not comply with the constraint
         check_var = copy.deepcopy(word)
         check_var.value = w
         if check_constraint(check_var, used_words):
             word.value = w
+            #print(f'word: {word.value}')
             result = backtracking(used_words + [word], not_used_words[1:], words)
             if result != None:
                 return result
@@ -269,9 +273,9 @@ def backtracking(used_words, not_used_words, words):
 def insert_word_to_puzzle(crossword, word, coord, orientation):
     pos_count = 0
     for char in word:
-        if orientation == 0: #horizontal if orientation == 0
+        if orientation == 0: #horizontal == 0
             crossword[coord[0]][coord[1]+pos_count] = char
-        else:
+        else: #vertical == 1
             crossword[coord[0]+pos_count][coord[1]] = char
         pos_count += 1
     return crossword
@@ -293,6 +297,7 @@ if __name__ == "__main__":
     for grid in grids:
         print(f'Grid no. {itr}:')
         print_grid(grid)
+
         print('Using heuristics')
         words = sort_by_lenght(words)
         horizontal_words = find_horizontal_words(grid)
@@ -305,11 +310,13 @@ if __name__ == "__main__":
         filtered_words = filter_by_possible_lengths(words, total_words)
         print(len(filtered_words))
         new_words = sort_by_most_used(filtered_words)
+
         used_words = []
         print('Backtraking...')
         start_time = time.time()
         print(timedelta(seconds=start_time))
         possible_solution = backtracking(used_words, total_words, filtered_words)
+
         end_time = time.time()
         print(timedelta(seconds=end_time))
         execution_time = end_time - start_time
