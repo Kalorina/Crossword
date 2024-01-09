@@ -1,0 +1,406 @@
+import pandas as pd
+
+############################### CLASS DEFINITION ##############################
+
+class Word:
+    # # Coordinates:
+    # # position of the starting and ending point
+    # start_coord = ()
+    # end_coord = ()
+    #
+    #
+    # orientation = 0
+    #
+    # # word length
+    # length = 0
+    #
+    # # value assigned to this word
+    # value = ''
+    def __init__(self):
+        self.start_coord = ()
+        self.end_coord = ()
+
+        self.orientation = 0
+        # horizontal word -> 0, vertical word -> 1
+
+        self.length = 0
+        self.value = ''
+
+
+class CrossWord():
+    # Dict of possible directions {name: (delta_row, delta_col)}
+    directions = {'down': (1, 0), 'right': (0, 1)}
+
+    def __init__(self, grid):
+        self.grid = grid
+        self.positions = self.get_positions(grid)
+        # for p in self.positions:
+        #     print(p)
+        # print()
+
+    def get_positions(self, grid):
+        # Computes list of all possible positions for words.
+        # Each position is a tuple: (start_row, start_col, length, direction),
+        # and length must be at least 2, i.e. positions for a single letter
+        # (length==1) are omitted.
+        # Note: Currently only for 'down' and 'right' directions.
+        def check_line(line):
+            res = []
+            start_i, was_space = 0, False
+            for i in range(len(line)):
+                if line[i] == '#' and was_space:
+                    was_space = False
+                    if i - start_i > 1:
+                        res.append((start_i, i - start_i))
+                elif line[i] == ' ' and not was_space:
+                    start_i = i
+                    was_space = True
+            return res
+
+        poss = []
+        for r in range(len(grid)):
+            row = grid[r]
+            poss = poss + [(r, p[0], p[1], 'right') for p in check_line(row)]
+        for c in range(len(grid[0])):
+            column = [row[c] for row in grid]
+            poss = poss + [(p[0], c, p[1], 'down') for p in check_line(column)]
+        return poss
+
+    def print_grid(self):
+        # Pretty prints the crossword
+        for row in self.grid:
+            print(''.join(row))
+        print()
+
+    def text_at_pos(self, position):
+        # Returns text actually written in specified position.
+        d_right, d_column = self.directions[position[3]]
+        row, column = position[0], position[1]
+        return ''.join([self.grid[row + i * d_right][column + i * d_column] for i in range(position[2])])
+
+    def write_word(self, position, word):
+        # Writes word to specified position and direction.
+        # Note: this method does not check whether the word can be placed into
+        # specified position.
+        dr, dc = self.directions[position[3]]
+        r, c = position[0], position[1]
+        for i in range(position[2]):
+            self.grid[r + i * dr][c + i * dc] = word[i]
+
+        self.print_grid()
+
+    def unwrite_word(self, position, used_words, used_poss):
+        empty_word = ''
+        for i in range(position[2]):
+            empty_word+=' '
+
+        self.write_word(position, empty_word)
+        for i in range(len(used_words)):
+            self.write_word(used_poss[i], used_words[i])
+
+
+    def find_end_position(self, position):
+        row = position[0]
+        col = position[1]
+        l = position[2] #lenght
+        direction = position[3]
+        if direction == 'right':
+            return tuple(row, col+l, l, direction)
+        else: #down
+            return tuple(row+l, col, l, direction)
+
+    def check_grid(self, row, col):
+        if self.grid[row][col] == '#':
+            return False
+        else:
+            return True
+
+    def can_write_word(self, position, word):
+        # Check whether the word can be placed into specified position,
+        # i.e. position is empty, or all letters within the position are same
+        # as those in the word.
+        ### YOUR CODE GOES HERE ###
+        check = False
+        #print(f'checking words: {word}')
+        if len(word) == position[2]:
+            for i in range(len(word)):
+                poss_char, word_char = self.text_at_pos(position)[i], word[i]
+                #print(f'char at poss: {poss_char}; char of word: {word_char}')
+                if self.text_at_pos(position)[i] == ' ':
+                    check = True
+                elif self.text_at_pos(position)[i] == word[i]:
+                    check = True
+                else:
+                    return False
+        if check:
+            print(f'can write: {word}')
+        return check
+            # if position[3] == 'right':
+            #     for i in range(len(word)):
+            #         if self.text_at_pos(position)[i] == word[i] or self.text_at_pos(position)[i] == ' ':
+            #         if (self.grid[position[0]][position[1]+i] == word[i] or
+            #             self.grid[position[0]][position[1]+i] == ' '):
+            #             return True
+            # else: #down
+            #     for i in range(len(word)):
+            #         if (self.grid[position[0]+i][position[1]] == word[i] or
+            #             self.grid[position[0]+i][position[1]] == ' '):
+            #             return True
+
+    def find_intersections(self, position):
+        intersections = []
+        for poss in self.positions:
+            if position[3] != poss[3]:
+                if position[3] == 'right':
+                    # start point and end point = start point + length
+                    if position[0] >= poss[0] and position[0] <= poss[0]+poss[2]-1:
+                        intersections.append(poss)
+                else: #down
+                    if poss[0] >= position[0] and poss[0] <= position[0] + position[2] - 1:
+                        intersections.append(poss)
+        return intersections
+
+    def get_empty_positions(self, positions):
+        result = []
+        for position in positions:
+            if ' ' in self.text_at_pos(position):
+                result.append(position)
+
+        return result
+
+    def get_full_positions(self, positions):
+        result = []
+        for position in positions:
+            if ' ' not in self.text_at_pos(position):
+                result.append(position)
+
+        return result
+
+    def check_positions(self, positions, words):
+        words_in_grid = []
+        for position in positions:
+            words_in_grid.append(self.text_at_pos(position))
+        series1 = pd.Series(words_in_grid)
+        series2 = pd.Series(words)
+
+        # check if all items of series1 exist in series2
+        return series1.isin(series2).all()
+
+############################### SERVICE METHODS ###############################
+
+def load_words(path):
+    # Loads all words from file
+    words = open(path, 'r').read().splitlines()
+    # add only viable words length min 2
+    for word in words:
+        if len(word) < 2:
+            words.remove(word)
+    # removing at least one duplicate: am
+    final_words = pd.Series(words).drop_duplicates().tolist()
+    return final_words
+
+def load_grids(path):
+    # Loads empty grids from file
+    raw = open(path, 'r').read().split('\n\n')
+    per_rows = [grid.rstrip().split('\n') for grid in raw]
+    per_char = [[list(row) for row in grid] for grid in per_rows]
+    return per_char
+
+
+def save_grids(solved_grids):
+    with open('krizovky_out.txt', 'w') as f:
+        for grid in solved_grids:
+            for row in grid:
+                for item in row:
+                    f.write(str(item))
+                f.write('\n')
+            f.write('\n')
+
+################################### SOLVING ###################################
+
+def filter_words(crossword, words):
+    #filter words by possible lengths in crossword
+    position_lenghts = []
+    for poss in crossword.positions:
+        position_lenghts.append(poss[2])
+    filtered_words = []
+    for w in words:
+        if len(w) in position_lenghts:
+            filtered_words.append(w)
+    return filtered_words
+
+def filter_words_by_len_start_char(words, length, word):
+    new_words = []
+    for w in words:
+        if len(w) == length:
+            new_words.append(w)
+            # if word[0] != ' ' or word[0] == w[0]:
+            #     new_words.append(w)
+            # else:
+            #     new_words.append(w)
+    return new_words
+
+def check_solution(crossword, words):
+    #crossword.print_grid()
+    check = False
+    words_positions = []
+    for poss in crossword.positions:
+        words_positions.append(crossword.text_at_pos(poss))
+
+    series1 = pd.Series(words_positions)
+    series2 = pd.Series(words)
+
+    # check if all items of series1 exist in series2
+    exists = series1.isin(series2).all()
+    print('check solution: ', exists)
+    return exists
+
+def solve(crossword, words):
+    # Fill the empty spaces in crossword with words
+    ### YOUR CODE GOES HERE ###
+
+    filtered_words = filter_words(crossword, words)
+    filtered_words = sorted(filtered_words, key=len, reverse=True)
+
+    positions = sorted(crossword.positions, key=lambda x: x[2], reverse=True) #sort by lengths
+    used_words = []
+    used_poss = []
+    result = solve_word_in_crossword(crossword, positions[0], filtered_words, used_words, used_poss)
+    if result[1]:
+
+        print('Success')
+    else:
+        print('Failed')
+
+    # cw = CrossWord(crossword.grid)
+    # for poss in positions:
+    #     print('next max position', poss)
+    #     if poss not in used_poss:
+    #         used_poss.append(poss)
+    #         cw, solution, used_words = solve_word_in_crossword(cw, poss, filtered_words, used_words, used_intersec, used_poss)
+    #         if solution:
+    #             if check_solution(cw, words):
+    #                 print('Found solution')
+    #                 break
+    #         else:
+    #             print('moving to next max position')
+    #             # if len(used_words) != 0:
+    #             #     for i in range(len(used_words)):
+    #             #         if len(used_words[i]) == filtered_words[i]:
+    #             #             filtered_words.remove(used_words[i])
+    #
+    # if check_solution(cw, words):
+    #     pass
+    # else:
+    #     if len(used_words) != 0:
+    #         for w in used_words:
+    #             words.remove(w)
+    #     solve(crossword, words)
+
+def solve_word_in_crossword(crossword, position, words, used_words, used_poss):
+    print('AAA ', used_words)
+    by_len_words = filter_words_by_len_start_char(words, position[2], crossword.text_at_pos(position))
+    if len(by_len_words) == 0:
+        return crossword, False, used_words
+
+    for candidate in by_len_words:
+        if crossword.can_write_word(position, candidate) and candidate not in used_words:
+            used_words.append(candidate)
+            used_poss.append(position)
+            by_len_words.remove(candidate)
+            crossword.write_word(position, candidate)
+            if check_solution(crossword, words):
+                return crossword, True, used_words
+
+            full_intersections = crossword.get_full_positions(crossword.find_intersections(position))
+            if crossword.check_positions(full_intersections, words) == False:
+                used_words.remove(candidate)
+                used_poss.remove(position)
+                crossword.unwrite_word(position, used_words, used_poss)
+                continue
+            empty_intersections = crossword.get_empty_positions(crossword.find_intersections(position))
+            all_non_empty_positions = crossword.get_empty_positions(crossword.positions)
+            new_positions = empty_intersections + all_non_empty_positions
+            if len(new_positions) != 0:
+                new_position = new_positions[0]
+                result = solve_word_in_crossword(crossword, new_position, words, used_words, used_poss)
+                if result[1]:
+                    return crossword, True, used_words
+                else:
+                    used_words.remove(candidate)
+                    used_poss.remove(position)
+                    crossword.unwrite_word(position, used_words, used_poss)
+                    continue
+            else:
+                return crossword, True, used_words
+    return crossword, False, used_words
+
+# def solve_crossword(grid, words):
+#
+#     def backtrack(row, col, direction, current_word):
+#         if row < 0 or row == len(grid) or col < 0 or col == len(grid[0]) or grid[row][col] == '*' or current_word not in words:
+#             return False
+#
+#         if not current_word:
+#             return True
+#
+#         if grid[row][col] != current_word[0]:
+#             return False
+#
+#         temp = grid[row][col]
+#         grid[row][col] = '*'
+#
+#         if direction == 'right':
+#             result = backtrack(row, col + 1, direction, current_word[1:])
+#         else:
+#             result = backtrack(row + 1, col, direction, current_word[1:])
+#
+#         grid[row][col] = temp
+#         return result
+#
+#     for row in range(len(grid)):
+#         for col in range(len(grid[0])):
+#             if grid[row][col] != '*':
+#                 for word in words:
+#                     if backtrack(row, col, 'right', word) or backtrack(row, col, 'down', word):
+#                         return True
+#     return False
+
+################################ MAIN PROGRAM #################################
+
+if __name__ == "__main__":
+    ## Load data:
+    words = load_words('words.txt')
+    grids = load_grids('krizovky.txt')
+
+    # ## Examples:
+    # dummy_grid = [list(s) for s in ['########', '#      #', '#      #', '#      #',
+    #                                    '###    #', '#      #', '########']]
+    # cw = CrossWord(dummy_grid)
+    # cw.print_grid()  # empty grid
+    # print('Positions: ' + str(cw.positions))
+    # cw.write_word((2, 1, 5, 'right'), 'hello')
+    # cw.write_word((1, 5, 5, 'down'), 'world')
+    # cw.write_word((4, 3, 4, 'right'), 'milk')
+    # cw.print_grid()  # 3 words already filled in
+    # print('Text at position (1,4) down: "' + cw.text_at_pos((1, 4, 5, 'down')) + '"\n\n\n')
+    #
+    points = [0.5, 1, 1.5, 1.5, 1.5, 2, 2, 2, 2, 2]
+    points_so_far = 0
+    # Solve crosswords (the last one is a bonus)
+    # instead of range(len(grids)) specify in which order do you want your crosswords to be tested
+    # for i in range(len(grids)):
+    #     print('==== Crossword No.' + str(i + 1) + ' ====')
+    #     cw = CrossWord(grids[i])
+    #     solve(cw, words)
+    #     cw.print_grid()
+    #
+    #     points_so_far += points[i]
+    #     print(f'Given all the solved crosswords are correct, you have so far {points_so_far}'
+    #           ' points!')
+
+    n = 4
+    print('==== Crossword No.' + str(n + 1) + ' ====')
+    cw = CrossWord(grids[n])
+    solve(cw, words)
+    cw.print_grid()
